@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>College Bus Tracker</title>
+
+        <!-- Leaflet CSS -->
+        <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+
+        <!-- Your CSS -->
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+        <style>
+            /* Safety net in case style.css fails */
+            #map {
+                height: 100vh;
+                width: 100%;
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <div id="map"></div>
+
+        <!-- Leaflet JS -->
+        <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+        </script>
+
+        <!-- My JS -->
+        <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+
+    </body>
+</html>

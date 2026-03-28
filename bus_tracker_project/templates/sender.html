@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Bus GPS Sender</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    
+    <body>
+        <h2>Bus GPS Sender</h2>
+        
+        <p id="status">Waiting...</p>
+        
+        <button onclick="startTracking()">Start Tracking</button>
+        <button onclick="stopTracking()">Stop Tracking</button>
+
+        <script>
+            let watchID = null;
+
+            function startTracking(){
+                document.getElementById("status").innerText = "Requesting location...";
+
+                if(!navigator.geolocation){
+                    document.getElementById("status").innerText = "Geolocation not supported";
+                    return;
+                }
+
+                watchID = navigator.geolocation.watchPosition(
+                    position => {
+                        const data = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude   // fixed
+                        };
+
+                        fetch("/update_location",{
+                            method: "POST",
+                            headers:{
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify(data)
+                        });
+
+                        document.getElementById("status").innerText = 
+                            "Sending: " + data.latitude + ", " + data.longitude;
+                    },
+                    error => {
+                        document.getElementById("status").innerText = 
+                            "GPS Error: " + error.message;
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 10000
+                    }
+                );
+            }
+
+            function stopTracking(){
+                if(watchID !== null){
+                    navigator.geolocation.clearWatch(watchID);
+                    document.getElementById("status").innerText = "Tracking stopped";
+                }
+            }
+        </script>
+    </body>
+</html>
