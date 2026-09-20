@@ -1,65 +1,609 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>Bus GPS Sender</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    </head>
-    
-    <body>
-        <h2>Bus GPS Sender</h2>
-        
-        <p id="status">Waiting...</p>
-        
-        <button onclick="startTracking()">Start Tracking</button>
-        <button onclick="stopTracking()">Stop Tracking</button>
+<html lang="en">
 
-        <script>
-            let watchID = null;
+<head>
+    <meta charset="UTF-8">
 
-            function startTracking(){
-                document.getElementById("status").innerText = "Requesting location...";
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-                if(!navigator.geolocation){
-                    document.getElementById("status").innerText = "Geolocation not supported";
-                    return;
-                }
+    <title>KIIT Bus Tracker - GPS Sender</title>
 
-                watchID = navigator.geolocation.watchPosition(
-                    position => {
-                        const data = {
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude   // fixed
-                        };
+    <style>
+        * {
+            box-sizing: border-box;
+        }
 
-                        fetch("/update_location",{
-                            method: "POST",
-                            headers:{
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify(data)
-                        });
+        body {
+            margin: 0;
+            min-height: 100vh;
 
-                        document.getElementById("status").innerText = 
-                            "Sending: " + data.latitude + ", " + data.longitude;
-                    },
-                    error => {
-                        document.getElementById("status").innerText = 
-                            "GPS Error: " + error.message;
-                    },
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            font-family: Arial, sans-serif;
+
+            background: #111;
+            color: #fff;
+        }
+
+        .container {
+            width: min(90%, 450px);
+
+            padding: 30px;
+
+            background: #1b1b1b;
+
+            border-radius: 12px;
+
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            margin-top: 0;
+
+            text-align: center;
+
+            color: #d4af37;
+        }
+
+        .subtitle {
+            text-align: center;
+
+            color: #aaa;
+
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+
+            margin-bottom: 8px;
+
+            font-size: 14px;
+
+            color: #ccc;
+        }
+
+        input {
+            width: 100%;
+
+            padding: 12px;
+
+            margin-bottom: 20px;
+
+            border: 1px solid #444;
+
+            border-radius: 6px;
+
+            background: #222;
+
+            color: #fff;
+
+            font-size: 16px;
+
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #d4af37;
+        }
+
+        button {
+            width: 100%;
+
+            padding: 13px;
+
+            margin-top: 5px;
+
+            border: none;
+
+            border-radius: 6px;
+
+            font-size: 16px;
+
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+        #startButton {
+            background: #2e8b57;
+            color: white;
+        }
+
+        #startButton:hover {
+            background: #267349;
+        }
+
+        #stopButton {
+            background: #a83232;
+            color: white;
+        }
+
+        #stopButton:hover {
+            background: #8c2929;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 25px;
+
+            padding: 15px;
+
+            border-radius: 6px;
+
+            background: #222;
+
+            font-size: 14px;
+
+            line-height: 1.6;
+        }
+
+        .status-title {
+            color: #d4af37;
+
+            font-weight: bold;
+        }
+
+        .coordinates {
+            margin-top: 10px;
+
+            font-family: monospace;
+
+            color: #8fd19e;
+
+            word-break: break-word;
+        }
+
+        .error {
+            color: #ff7777;
+        }
+
+        .success {
+            color: #7ee787;
+        }
+
+        .warning {
+            color: #e6c96a;
+        }
+    </style>
+</head>
+
+
+<body>
+
+    <div class="container">
+
+        <h1>KIIT BUS TRACKER</h1>
+
+        <div class="subtitle">
+            GPS Location Sender
+        </div>
+
+
+        <!-- ==================================================
+             BUS ID
+        ================================================== -->
+
+        <label for="busId">
+            Bus ID
+        </label>
+
+        <input
+            type="number"
+            id="busId"
+            placeholder="Enter Bus ID"
+            min="1"
+        >
+
+
+        <!-- ==================================================
+             CONTROL BUTTONS
+        ================================================== -->
+
+        <button
+            id="startButton"
+            onclick="startTracking()"
+        >
+            Start Tracking
+        </button>
+
+        <button
+            id="stopButton"
+            onclick="stopTracking()"
+            disabled
+        >
+            Stop Tracking
+        </button>
+
+
+        <!-- ==================================================
+             STATUS
+        ================================================== -->
+
+        <div class="status">
+
+            <div class="status-title">
+                Status
+            </div>
+
+            <div id="status">
+                Enter a Bus ID and press "Start Tracking".
+            </div>
+
+            <div
+                id="coordinates"
+                class="coordinates"
+            ></div>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        // ====================================================
+        // GLOBAL VARIABLES
+        // ====================================================
+
+        let watchId = null;
+
+        let tracking = false;
+
+
+        // ====================================================
+        // DOM ELEMENTS
+        // ====================================================
+
+        const busIdInput =
+            document.getElementById("busId");
+
+        const startButton =
+            document.getElementById("startButton");
+
+        const stopButton =
+            document.getElementById("stopButton");
+
+        const statusElement =
+            document.getElementById("status");
+
+        const coordinatesElement =
+            document.getElementById("coordinates");
+
+
+        // ====================================================
+        // UPDATE STATUS
+        // ====================================================
+
+        function updateStatus(
+            message,
+            className = ""
+        ) {
+
+            statusElement.textContent = message;
+
+            statusElement.className = className;
+        }
+
+
+        // ====================================================
+        // START GPS TRACKING
+        // ====================================================
+
+        function startTracking() {
+
+            // ------------------------------------------------
+            // Check Bus ID
+            // ------------------------------------------------
+
+            const busId =
+                parseInt(busIdInput.value);
+
+            if (!busId || busId <= 0) {
+
+                updateStatus(
+                    "Please enter a valid Bus ID.",
+                    "error"
+                );
+
+                return;
+            }
+
+
+            // ------------------------------------------------
+            // Check browser support
+            // ------------------------------------------------
+
+            if (!navigator.geolocation) {
+
+                updateStatus(
+                    "Geolocation is not supported by this browser.",
+                    "error"
+                );
+
+                return;
+            }
+
+
+            // ------------------------------------------------
+            // Prevent duplicate tracking
+            // ------------------------------------------------
+
+            if (tracking) {
+                return;
+            }
+
+
+            tracking = true;
+
+
+            startButton.disabled = true;
+            stopButton.disabled = false;
+
+            busIdInput.disabled = true;
+
+
+            updateStatus(
+                "Requesting GPS location...",
+                "warning"
+            );
+
+
+            // ------------------------------------------------
+            // Start watching GPS
+            // ------------------------------------------------
+
+            watchId =
+                navigator.geolocation.watchPosition(
+                    handlePosition,
+                    handleLocationError,
                     {
                         enableHighAccuracy: true,
+
                         maximumAge: 0,
+
                         timeout: 10000
                     }
                 );
+        }
+
+
+        // ====================================================
+        // GPS POSITION RECEIVED
+        // ====================================================
+
+        function handlePosition(position) {
+
+            const latitude =
+                position.coords.latitude;
+
+            const longitude =
+                position.coords.longitude;
+
+            const accuracy =
+                position.coords.accuracy;
+
+
+            // ------------------------------------------------
+            // Display coordinates
+            // ------------------------------------------------
+
+            coordinatesElement.innerHTML =
+                `
+                Latitude: ${latitude.toFixed(7)}<br>
+                Longitude: ${longitude.toFixed(7)}<br>
+                Accuracy: ±${accuracy.toFixed(2)} m
+                `;
+
+
+            updateStatus(
+                "GPS location received. Sending to server...",
+                "warning"
+            );
+
+
+            // ------------------------------------------------
+            // Send GPS data to Flask
+            // ------------------------------------------------
+
+            sendLocation(
+                latitude,
+                longitude
+            );
+        }
+
+
+        // ====================================================
+        // SEND LOCATION TO SERVER
+        // ====================================================
+
+        async function sendLocation(
+            latitude,
+            longitude
+        ) {
+
+            const busId =
+                parseInt(busIdInput.value);
+
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/update_location",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body: JSON.stringify({
+                                bus_id: busId,
+
+                                latitude: latitude,
+
+                                longitude: longitude
+                            })
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                // ------------------------------------------------
+                // Server error
+                // ------------------------------------------------
+
+                if (!response.ok) {
+
+                    updateStatus(
+                        data.error ||
+                        "Server rejected the location.",
+                        "error"
+                    );
+
+                    return;
+                }
+
+
+                // ------------------------------------------------
+                // Successful update
+                // ------------------------------------------------
+
+                updateStatus(
+                    "Location sent successfully.",
+                    "success"
+                );
+
             }
 
-            function stopTracking(){
-                if(watchID !== null){
-                    navigator.geolocation.clearWatch(watchID);
-                    document.getElementById("status").innerText = "Tracking stopped";
+            catch (error) {
+
+                console.error(error);
+
+                updateStatus(
+                    "Could not connect to the server.",
+                    "error"
+                );
+            }
+        }
+
+
+        // ====================================================
+        // GPS ERROR HANDLER
+        // ====================================================
+
+        function handleLocationError(error) {
+
+            let message =
+                "Unable to retrieve GPS location.";
+
+
+            switch (error.code) {
+
+                case error.PERMISSION_DENIED:
+
+                    message =
+                        "Location permission was denied.";
+
+                    break;
+
+
+                case error.POSITION_UNAVAILABLE:
+
+                    message =
+                        "GPS location is currently unavailable.";
+
+                    break;
+
+
+                case error.TIMEOUT:
+
+                    message =
+                        "GPS request timed out.";
+
+                    break;
+
+
+                default:
+
+                    message =
+                        "An unknown GPS error occurred.";
+            }
+
+
+            updateStatus(
+                message,
+                "error"
+            );
+        }
+
+
+        // ====================================================
+        // STOP GPS TRACKING
+        // ====================================================
+
+        function stopTracking() {
+
+            if (watchId !== null) {
+
+                navigator.geolocation.clearWatch(
+                    watchId
+                );
+
+                watchId = null;
+            }
+
+
+            tracking = false;
+
+
+            startButton.disabled = false;
+
+            stopButton.disabled = true;
+
+            busIdInput.disabled = false;
+
+
+            updateStatus(
+                "GPS tracking stopped.",
+                "warning"
+            );
+        }
+
+
+        // ====================================================
+        // CLEANUP WHEN PAGE IS CLOSED
+        // ====================================================
+
+        window.addEventListener(
+            "beforeunload",
+            function () {
+
+                if (watchId !== null) {
+
+                    navigator.geolocation.clearWatch(
+                        watchId
+                    );
                 }
             }
-        </script>
-    </body>
+        );
+
+    </script>
+
+</body>
+
 </html>
