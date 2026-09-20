@@ -1,299 +1,646 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import mysql.connector
+import os
 
-conn = mysql.connector.connect(
-    host="localhost",
-    user="bususer",
-    password="BusUser@1234",
-    database="bus_tracker"
-)
-cursor = conn.cursor()
 
-BG="#0a0a0a"
-PANEL="#111111"
-ACCENT="#FFD700"
-ACCENT_DIM="#998100"
-FG="#FFFFFF"
-FG_DIM="#888888"
-BORDER="#2a2a2a"
-ROW_ODD="#141414"
-ROW_EVEN="#0f0f0f"
-SEL_BG="#2a2200"
-SEL_FG="#FFD700"
+# ============================================================
+# DATABASE CONFIGURATION
+# ============================================================
 
-FONT_TITLE=("Courier New",17,"bold")
-FONT_BTN=("Courier New",10,"bold")
-FONT_TABLE=("Courier New",10)
-FONT_HEADER=("Courier New",10,"bold")
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST", "localhost"),
+    "user": os.getenv("DB_USER", "bususer"),
+    "password": os.getenv("DB_PASSWORD", "YOUR_PASSWORD"),
+    "database": os.getenv("DB_NAME", "bus_tracker")
+}
 
-root=tk.Tk()
-root.title("KIIT BUS TRACKER")
-root.geometry("820x520")
-root.configure(bg=BG)
-root.resizable(False,False)
 
-scan_canvas=tk.Canvas(root,width=820,height=520,bg=BG,highlightthickness=0)
-scan_canvas.place(x=0,y=0)
+def get_db_connection():
+    return mysql.connector.connect(**DB_CONFIG)
 
-for y in range(0,520,4):
-    scan_canvas.create_line(0,y,820,y,fill="#ffffff",stipple="gray12")
 
-header=tk.Frame(root,bg=BG,height=64)
-header.place(x=0,y=0,width=820)
+# ============================================================
+# APPLICATION
+# ============================================================
 
-tk.Frame(header,bg=ACCENT,width=4,height=64).place(x=0,y=0)
+class BusTrackerGUI:
 
-tk.Label(header,
-text="◈  BHUBANESWAR BUS TRACKER",
-font=FONT_TITLE,
-bg=BG,
-fg=ACCENT,
-padx=16).place(x=10,y=14)
+    def __init__(self, root):
 
-tk.Label(header,
-text="REAL-TIME TRANSIT MANAGEMENT SYSTEM  //  v2.5",
-font=("Courier New",8),
-bg=BG,
-fg=ACCENT_DIM).place(x=26,y=42)
+        self.root = root
 
-tk.Label(header,
-text="[ SYS:ONLINE ]",
-font=("Courier New",8,"bold"),
-bg=BG,
-fg=ACCENT).place(x=680,y=24)
+        self.root.title("KIIT BUS TRACKER")
+        self.root.geometry("1100x700")
+        self.root.minsize(900, 600)
 
-tk.Frame(root,bg=ACCENT,height=2).place(x=0,y=64,width=820)
+        self.root.configure(bg="#111111")
 
-btn_frame=tk.Frame(root,bg=PANEL,height=52)
-btn_frame.place(x=0,y=66,width=820)
+        self.create_styles()
+        self.create_interface()
 
-BUTTONS=[
-("▸  VIEW BUSES","show_buses"),
-("▸  VIEW ROUTES","show_routes"),
-("▸  VIEW SCHEDULE","show_schedule"),
-("▸  VIEW ROUTE STOPS","show_route_stops"),
-]
+        self.load_dashboard()
 
-def dispatch(name):
-    {
-    "show_buses":show_buses,
-    "show_routes":show_routes,
-    "show_schedule":show_schedule,
-    "show_route_stops":show_route_stops
-    }[name]()
+    # ========================================================
+    # STYLES
+    # ========================================================
 
-def make_btn(parent,text,cmd_name,col):
-    f=tk.Frame(parent,bg=ACCENT,padx=1,pady=1)
-    f.grid(row=0,column=col,padx=(14 if col==0 else 8,0),pady=10)
+    def create_styles(self):
 
-    b=tk.Button(
-    f,
-    text=text,
-    font=FONT_BTN,
-    bg=PANEL,
-    fg=ACCENT,
-    activebackground=ACCENT,
-    activeforeground=BG,
-    relief="flat",
-    cursor="hand2",
-    width=18,
-    pady=5,
-    command=lambda n=cmd_name:dispatch(n)
-    )
-    b.pack()
+        style = ttk.Style()
 
-    def on_enter(e):
-        b.configure(bg=ACCENT,fg=BG)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
 
-    def on_leave(e):
-        b.configure(bg=PANEL,fg=ACCENT)
+        style.configure(
+            "Treeview",
+            background="#1c1c1c",
+            foreground="white",
+            fieldbackground="#1c1c1c",
+            rowheight=30,
+            font=("Arial", 10)
+        )
 
-    b.bind("<Enter>",on_enter)
-    b.bind("<Leave>",on_leave)
+        style.configure(
+            "Treeview.Heading",
+            background="#d4af37",
+            foreground="black",
+            font=("Arial", 10, "bold")
+        )
 
-for i,(txt,cmd) in enumerate(BUTTONS):
-    make_btn(btn_frame,txt,cmd,i)
+        style.map(
+            "Treeview",
+            background=[
+                ("selected", "#555555")
+            ],
+            foreground=[
+                ("selected", "white")
+            ]
+        )
 
-tk.Frame(root,bg=BORDER,height=1).place(x=0,y=118,width=820)
+    # ========================================================
+    # MAIN INTERFACE
+    # ========================================================
 
-status_var=tk.StringVar(value="SELECT A VIEW  //  AWAITING INPUT")
+    def create_interface(self):
 
-tk.Label(root,
-textvariable=status_var,
-font=("Courier New",8),
-bg=BG,
-fg=ACCENT_DIM,
-anchor="w",
-padx=16).place(x=0,y=120,width=700,height=22)
+        # Header
+        header = tk.Frame(
+            self.root,
+            bg="#111111",
+            height=80
+        )
 
-row_count_var=tk.StringVar(value="ROWS: 0")
+        header.pack(
+            fill="x",
+            padx=20,
+            pady=(15, 5)
+        )
 
-tk.Label(root,
-textvariable=row_count_var,
-font=("Courier New",8),
-bg=BG,
-fg=ACCENT_DIM,
-anchor="e",
-padx=16).place(x=700,y=120,width=120,height=22)
+        title = tk.Label(
+            header,
+            text="KIIT BUS TRACKER",
+            bg="#111111",
+            fg="#d4af37",
+            font=("Arial", 24, "bold")
+        )
 
-style=ttk.Style()
-style.theme_use("clam")
+        title.pack(anchor="w")
 
-style.configure("Futuristic.Treeview",
-background=ROW_ODD,
-fieldbackground=ROW_ODD,
-foreground=FG,
-rowheight=28,
-font=FONT_TABLE,
-borderwidth=0,
-relief="flat")
+        subtitle = tk.Label(
+            header,
+            text="Bus tracking and database management",
+            bg="#111111",
+            fg="#aaaaaa",
+            font=("Arial", 10)
+        )
 
-style.configure("Futuristic.Treeview.Heading",
-background=PANEL,
-foreground=ACCENT,
-font=FONT_HEADER,
-relief="flat",
-borderwidth=0,
-padding=(8,6))
+        subtitle.pack(anchor="w")
 
-style.map("Futuristic.Treeview",
-background=[("selected",SEL_BG)],
-foreground=[("selected",SEL_FG)])
+        # Button bar
+        button_frame = tk.Frame(
+            self.root,
+            bg="#111111"
+        )
 
-tree_frame=tk.Frame(root,bg=BORDER,padx=1,pady=1)
-tree_frame.place(x=14,y=146,width=792,height=310)
+        button_frame.pack(
+            fill="x",
+            padx=20,
+            pady=10
+        )
 
-inner=tk.Frame(tree_frame,bg=BG)
-inner.pack(fill="both",expand=True)
+        buttons = [
+            ("Buses", self.view_buses),
+            ("Routes", self.view_routes),
+            ("Route Stops", self.view_route_stops),
+            ("Schedule", self.view_schedule),
+            ("Refresh", self.load_dashboard)
+        ]
 
-tree=ttk.Treeview(inner,style="Futuristic.Treeview",show="headings")
-tree.pack(side="left",fill="both",expand=True)
+        for text, command in buttons:
 
-scrollbar=ttk.Scrollbar(inner,orient="vertical",command=tree.yview)
-scrollbar.pack(side="right",fill="y")
-tree.configure(yscrollcommand=scrollbar.set)
+            button = tk.Button(
+                button_frame,
+                text=text,
+                command=command,
+                bg="#222222",
+                fg="#d4af37",
+                activebackground="#333333",
+                activeforeground="white",
+                relief="flat",
+                bd=0,
+                padx=18,
+                pady=9,
+                font=("Arial", 10, "bold"),
+                cursor="hand2"
+            )
 
-tree.tag_configure("odd",background=ROW_ODD)
-tree.tag_configure("even",background=ROW_EVEN)
+            button.pack(
+                side="left",
+                padx=(0, 8)
+            )
 
-tk.Frame(root,bg=ACCENT,height=2).place(x=0,y=460,width=820)
+        # Search area
+        search_frame = tk.Frame(
+            self.root,
+            bg="#111111"
+        )
 
-tk.Label(root,
-text="DB: bus_tracker@localhost   //   USER: bususer   //   SYSTEM READY",
-font=("Courier New",7),
-bg=BG,
-fg=FG_DIM).place(x=14,y=464)
+        search_frame.pack(
+            fill="x",
+            padx=20,
+            pady=(0, 10)
+        )
 
-search_frame=tk.Frame(root,bg=BG)
-search_frame.place(x=14,y=430)
+        tk.Label(
+            search_frame,
+            text="Route ID:",
+            bg="#111111",
+            fg="white",
+            font=("Arial", 10)
+        ).pack(side="left")
 
-tk.Label(search_frame,
-text="SEARCH STOP:",
-font=("Courier New",9,"bold"),
-bg=BG,
-fg=ACCENT).pack(side="left",padx=(0,10))
+        self.route_entry = tk.Entry(
+            search_frame,
+            bg="#222222",
+            fg="white",
+            insertbackground="white",
+            relief="flat",
+            font=("Arial", 10),
+            width=10
+        )
 
-stop_entry=tk.Entry(search_frame,
-font=("Courier New",10),
-bg="#111111",
-fg=FG,
-insertbackground=ACCENT,
-width=25,
-relief="flat")
-stop_entry.pack(side="left")
+        self.route_entry.pack(
+            side="left",
+            padx=8,
+            ipady=5
+        )
 
-tk.Button(
-search_frame,
-text="FIND ROUTES",
-font=("Courier New",9,"bold"),
-bg=PANEL,
-fg=ACCENT,
-activebackground=ACCENT,
-activeforeground=BG,
-relief="flat",
-padx=12,
-command=lambda:search_stop()
-).pack(side="left",padx=10)
+        tk.Button(
+            search_frame,
+            text="Search Route",
+            command=self.route_lookup,
+            bg="#d4af37",
+            fg="black",
+            activebackground="#e5c158",
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=7,
+            font=("Arial", 10, "bold"),
+            cursor="hand2"
+        ).pack(side="left")
 
-def clear_table():
-    for item in tree.get_children():
-        tree.delete(item)
+        # Main content
+        content = tk.Frame(
+            self.root,
+            bg="#111111"
+        )
 
-def populate(columns,rows,status_msg):
-    clear_table()
-    tree["columns"]=columns
+        content.pack(
+            fill="both",
+            expand=True,
+            padx=20,
+            pady=(0, 20)
+        )
 
-    for col in columns:
-        tree.heading(col,text=col.upper(),anchor="center")
-        tree.column(col,anchor="center",
-        width=max(120,780//len(columns)),
-        stretch=True)
+        self.tree = ttk.Treeview(
+            content,
+            show="headings"
+        )
 
-    for i,r in enumerate(rows):
-        tag="even" if i%2==0 else "odd"
-        tree.insert("", "end", values=r, tags=(tag,))
+        self.tree.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
 
-    status_var.set(status_msg)
-    row_count_var.set(f"ROWS: {len(rows)}")
+        scrollbar = ttk.Scrollbar(
+            content,
+            orient="vertical",
+            command=self.tree.yview
+        )
 
-def show_buses():
-    cursor.execute("SELECT * FROM buses")
-    rows=cursor.fetchall()
-    populate(("ID","Number","Capacity"),rows,
-    "MODULE: BUSES  //  ALL REGISTERED VEHICLES")
+        scrollbar.pack(
+            side="right",
+            fill="y"
+        )
 
-def show_routes():
-    cursor.execute("SELECT * FROM routes")
-    rows=cursor.fetchall()
-    populate(("ID","Route","Start","End"),rows,
-    "MODULE: ROUTES  //  ACTIVE ROUTE REGISTRY")
+        self.tree.configure(
+            yscrollcommand=scrollbar.set
+        )
 
-def show_schedule():
-    q="""
-    SELECT buses.bus_number, drivers.driver_name,
-    routes.route_name, schedules.departure_time
-    FROM schedules
-    JOIN buses ON schedules.bus_id=buses.bus_id
-    JOIN drivers ON schedules.driver_id=drivers.driver_id
-    JOIN routes ON schedules.route_id=routes.route_id
-    """
-    cursor.execute(q)
-    rows=cursor.fetchall()
-    populate(("Bus","Driver","Route","Time"),rows,
-    "MODULE: SCHEDULE  //  LIVE DEPARTURE BOARD")
+        # Status bar
+        self.status = tk.Label(
+            self.root,
+            text="Ready",
+            bg="#181818",
+            fg="#aaaaaa",
+            anchor="w",
+            padx=20,
+            pady=7,
+            font=("Arial", 9)
+        )
 
-def show_route_stops():
-    q="""
-    SELECT routes.route_name,
-    stops.stop_name,
-    route_stops.stop_order
-    FROM route_stops
-    JOIN routes ON route_stops.route_id=routes.route_id
-    JOIN stops ON route_stops.stop_id=stops.stop_id
-    ORDER BY routes.route_id,route_stops.stop_order
-    """
-    cursor.execute(q)
-    rows=cursor.fetchall()
-    populate(("Route","Stop","Order"),rows,
-    "MODULE: ROUTE STOPS  //  STOP SEQUENCE PER ROUTE")
+        self.status.pack(
+            fill="x",
+            side="bottom"
+        )
 
-def search_stop():
-    stop=stop_entry.get()
+    # ========================================================
+    # TREEVIEW HELPER
+    # ========================================================
 
-    q="""
-    SELECT stops.stop_name,routes.route_name
-    FROM route_stops
-    JOIN stops ON route_stops.stop_id=stops.stop_id
-    JOIN routes ON route_stops.route_id=routes.route_id
-    WHERE stops.stop_name LIKE %s
-    ORDER BY routes.route_name
-    """
+    def display_data(self, columns, rows):
 
-    cursor.execute(q,("%"+stop+"%",))
-    rows=cursor.fetchall()
+        self.tree.delete(*self.tree.get_children())
 
-    populate(("Stop","Route"),rows,
-    "MODULE: STOP SEARCH  //  ROUTES SERVING STOP")
+        self.tree["columns"] = columns
 
-root.mainloop()
+        for column in columns:
+
+            self.tree.heading(
+                column,
+                text=column
+            )
+
+            self.tree.column(
+                column,
+                width=150,
+                anchor="center"
+            )
+
+        for row in rows:
+            self.tree.insert(
+                "",
+                "end",
+                values=row
+            )
+
+        self.status.config(
+            text=f"{len(rows)} record(s)"
+        )
+
+    # ========================================================
+    # LOAD DASHBOARD
+    # ========================================================
+
+    def load_dashboard(self):
+
+        try:
+
+            db = get_db_connection()
+            cursor = db.cursor()
+
+            cursor.execute("""
+                SELECT
+                    bus_id,
+                    bus_number,
+                    capacity,
+                    current_lat,
+                    current_lng,
+                    last_updated
+                FROM buses
+                ORDER BY bus_id
+            """)
+
+            rows = cursor.fetchall()
+
+            self.display_data(
+                (
+                    "Bus ID",
+                    "Bus Number",
+                    "Capacity",
+                    "Latitude",
+                    "Longitude",
+                    "Last Updated"
+                ),
+                rows
+            )
+
+            cursor.close()
+            db.close()
+
+        except mysql.connector.Error as error:
+
+            self.show_database_error(error)
+
+    # ========================================================
+    # VIEW BUSES
+    # ========================================================
+
+    def view_buses(self):
+
+        try:
+
+            db = get_db_connection()
+            cursor = db.cursor()
+
+            cursor.execute("""
+                SELECT
+                    bus_id,
+                    bus_number,
+                    capacity,
+                    current_lat,
+                    current_lng,
+                    last_updated
+                FROM buses
+                ORDER BY bus_id
+            """)
+
+            rows = cursor.fetchall()
+
+            self.display_data(
+                (
+                    "Bus ID",
+                    "Bus Number",
+                    "Capacity",
+                    "Latitude",
+                    "Longitude",
+                    "Last Updated"
+                ),
+                rows
+            )
+
+            cursor.close()
+            db.close()
+
+        except mysql.connector.Error as error:
+
+            self.show_database_error(error)
+
+    # ========================================================
+    # VIEW ROUTES
+    # ========================================================
+
+    def view_routes(self):
+
+        try:
+
+            db = get_db_connection()
+            cursor = db.cursor()
+
+            cursor.execute("""
+                SELECT
+                    route_id,
+                    route_name,
+                    start_stop,
+                    end_stop
+                FROM routes
+                ORDER BY route_id
+            """)
+
+            rows = cursor.fetchall()
+
+            self.display_data(
+                (
+                    "Route ID",
+                    "Route Name",
+                    "Start Stop",
+                    "End Stop"
+                ),
+                rows
+            )
+
+            cursor.close()
+            db.close()
+
+        except mysql.connector.Error as error:
+
+            self.show_database_error(error)
+
+    # ========================================================
+    # VIEW ROUTE STOPS
+    # ========================================================
+
+    def view_route_stops(self):
+
+        try:
+
+            db = get_db_connection()
+            cursor = db.cursor()
+
+            cursor.execute("""
+                SELECT
+                    rs.route_id,
+                    r.route_name,
+                    rs.stop_order,
+                    s.stop_name,
+                    s.lat,
+                    s.lng
+                FROM route_stops rs
+                JOIN routes r
+                    ON rs.route_id = r.route_id
+                JOIN stops s
+                    ON rs.stop_id = s.stop_id
+                ORDER BY
+                    rs.route_id,
+                    rs.stop_order
+            """)
+
+            rows = cursor.fetchall()
+
+            self.display_data(
+                (
+                    "Route ID",
+                    "Route Name",
+                    "Stop Order",
+                    "Stop Name",
+                    "Latitude",
+                    "Longitude"
+                ),
+                rows
+            )
+
+            cursor.close()
+            db.close()
+
+        except mysql.connector.Error as error:
+
+            self.show_database_error(error)
+
+    # ========================================================
+    # VIEW SCHEDULE
+    # ========================================================
+
+    def view_schedule(self):
+
+        try:
+
+            db = get_db_connection()
+            cursor = db.cursor()
+
+            cursor.execute("""
+                SELECT
+                    s.schedule_id,
+                    b.bus_number,
+                    d.driver_name,
+                    r.route_name,
+                    s.departure_time
+                FROM schedules s
+                LEFT JOIN buses b
+                    ON s.bus_id = b.bus_id
+                LEFT JOIN drivers d
+                    ON s.driver_id = d.driver_id
+                JOIN routes r
+                    ON s.route_id = r.route_id
+                ORDER BY s.departure_time
+            """)
+
+            rows = cursor.fetchall()
+
+            self.display_data(
+                (
+                    "Schedule ID",
+                    "Bus",
+                    "Driver",
+                    "Route",
+                    "Departure"
+                ),
+                rows
+            )
+
+            cursor.close()
+            db.close()
+
+        except mysql.connector.Error as error:
+
+            self.show_database_error(error)
+
+    # ========================================================
+    # ROUTE LOOKUP
+    # ========================================================
+
+    def route_lookup(self):
+
+        route_id = self.route_entry.get().strip()
+
+        if not route_id:
+            messagebox.showwarning(
+                "Input Required",
+                "Please enter a Route ID."
+            )
+            return
+
+        try:
+            route_id = int(route_id)
+
+        except ValueError:
+
+            messagebox.showerror(
+                "Invalid Input",
+                "Route ID must be a number."
+            )
+
+            return
+
+        try:
+
+            db = get_db_connection()
+            cursor = db.cursor()
+
+            cursor.execute("""
+                SELECT
+                    rs.route_id,
+                    r.route_name,
+                    rs.stop_order,
+                    s.stop_name,
+                    s.location,
+                    s.lat,
+                    s.lng
+                FROM route_stops rs
+                JOIN routes r
+                    ON rs.route_id = r.route_id
+                JOIN stops s
+                    ON rs.stop_id = s.stop_id
+                WHERE rs.route_id = %s
+                ORDER BY rs.stop_order
+            """, (route_id,))
+
+            rows = cursor.fetchall()
+
+            if not rows:
+
+                messagebox.showinfo(
+                    "No Results",
+                    f"No stops found for Route {route_id}."
+                )
+
+                cursor.close()
+                db.close()
+
+                return
+
+            self.display_data(
+                (
+                    "Route ID",
+                    "Route Name",
+                    "Stop Order",
+                    "Stop Name",
+                    "Location",
+                    "Latitude",
+                    "Longitude"
+                ),
+                rows
+            )
+
+            cursor.close()
+            db.close()
+
+        except mysql.connector.Error as error:
+
+            self.show_database_error(error)
+
+    # ========================================================
+    # DATABASE ERROR
+    # ========================================================
+
+    def show_database_error(self, error):
+
+        self.status.config(
+            text="Database connection error"
+        )
+
+        messagebox.showerror(
+            "Database Error",
+            str(error)
+        )
+
+
+# ============================================================
+# PROGRAM ENTRY POINT
+# ============================================================
+
+def main():
+
+    root = tk.Tk()
+
+    BusTrackerGUI(root)
+
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
