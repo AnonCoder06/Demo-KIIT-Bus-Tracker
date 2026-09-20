@@ -1,38 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>College Bus Tracker</title>
 
-        <!-- Leaflet CSS -->
-        <link
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>KIIT Bus Tracker</title>
+
+
+    <!-- =====================================================
+         LEAFLET CSS
+         ===================================================== -->
+
+    <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        />
+    >
 
-        <!-- Your CSS -->
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
-        <style>
-            /* Safety net in case style.css fails */
-            #map {
-                height: 100vh;
-                width: 100%;
-            }
-        </style>
-    </head>
+    <!-- =====================================================
+         APPLICATION CSS
+         ===================================================== -->
 
-    <body>
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <header class="top-bar">
+
+        <div class="header-content">
+
+            <div>
+                <h1>KIIT Bus Tracker</h1>
+
+                <p>
+                    Real-time campus bus tracking
+                </p>
+            </div>
+
+
+            <a
+                href="/sender"
+                class="sender-button"
+            >
+                GPS Sender
+            </a>
+
+        </div>
+
+    </header>
+
+
+    <!-- =====================================================
+         MAP
+         ===================================================== -->
+
+    <main>
 
         <div id="map"></div>
 
-        <!-- Leaflet JS -->
-        <script
-        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-        </script>
+    </main>
 
-        <!-- My JS -->
-        <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 
-    </body>
+    <!-- =====================================================
+         LEAFLET JAVASCRIPT
+         ===================================================== -->
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    ></script>
+
+
+    <!-- =====================================================
+         APPLICATION JAVASCRIPT
+         ===================================================== -->
+
+    <script
+        src="{{ url_for('static', filename='js/map.js') }}"
+    ></script>
+
+</body>
+
 </html>
